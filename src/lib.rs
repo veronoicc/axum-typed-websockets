@@ -278,6 +278,13 @@ impl<S, R, C> WebSocket<S, R, C> {
         self.socket.close().await.map_err(Error::Ws)
     }
 
+    /// Return the selected WebSocket subprotocol, if one has been chosen.
+    ///
+    /// This is analogous to [`axum::extract::ws::WebSocket::protocol`].
+    pub fn protocol(&self) -> Option<&axum::http::HeaderValue> {
+        self.socket.protocol()
+    }
+
     /// Get the inner axum [`axum::extract::ws::WebSocket`].
     pub fn into_inner(self) -> ws::WebSocket {
         self.socket

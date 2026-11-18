@@ -128,6 +128,35 @@ async fn ping_payload_is_forwarded_untouched() {
     }
 }
 
+#[tokio::test]
+async fn negotiated_subprotocol_is_exposed_on_socket() {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+
+    async fn handler(ws: WebSocketUpgrade<String, Ping>) -> impl IntoResponse {
+        ws.map(|upgrade| upgrade.protocols(["v2"])).on_upgrade(
+            |mut socket: WebSocket<String, Ping>| async move {
+                let protocol = socket
+                    .protocol()
+                    .map(|p| p.to_str().unwrap().to_owned())
+                    .unwrap_or_default();
+                socket.send(Message::Item(protocol)).await.unwrap();
+            },
+        )
+    }
+    let addr = serve(Router::new().route("/ws", get(handler))).await;
+
+    let mut request = format!("ws://{addr}/ws").into_client_request().unwrap();
+    request
+        .headers_mut()
+        .insert("sec-websocket-protocol", "v1, v2".parse().unwrap());
+    let mut client = connect_async(request).await.unwrap().0;
+
+    assert_eq!(
+        client.next().await.unwrap().unwrap(),
+        TMessage::text(r#""v2""#)
+    );
+}
+
 #[cfg(feature = "msgpack")]
 #[tokio::test]
 async fn msgpack_codec_roundtrips_binary() {
