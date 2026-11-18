@@ -69,15 +69,15 @@
 //! The following features are available:
 //!
 //! - `json`: Enables [`TextJsonCodec`] and [`BinaryJsonCodec`] which encodes message as JSON using
-//! `serde_json`. Enabled by default.
+//!   `serde_json`. Enabled by default.
 //! - `msgpack`: Enables [`MsgPackCodec`] which encodes message as MessagePack using
-//! `rmp-serde`.
+//!   `rmp-serde`.
 
 #![warn(
     clippy::all,
     clippy::dbg_macro,
     clippy::todo,
-    clippy::empty_enum,
+    clippy::empty_enums,
     clippy::enum_glob_use,
     clippy::mem_forget,
     clippy::unused_self,
@@ -86,9 +86,7 @@
     clippy::needless_borrow,
     clippy::match_wildcard_for_single_variants,
     clippy::if_let_mutex,
-    clippy::mismatched_target_os,
     clippy::await_holding_lock,
-    clippy::match_on_vec_items,
     clippy::imprecise_flops,
     clippy::suboptimal_flops,
     clippy::lossy_float_literal,
@@ -108,19 +106,17 @@
     missing_docs
 )]
 #![deny(unreachable_pub, private_interfaces, private_bounds)]
-#![allow(elided_lifetimes_in_paths, clippy::type_complexity)]
 #![forbid(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(test, allow(clippy::float_cmp))]
 
 use axum::{
-    async_trait,
-    extract::{ws, FromRequestParts},
+    body::Bytes,
+    extract::{FromRequestParts, ws},
     http::request::Parts,
     response::IntoResponse,
 };
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
     error::Error as StdError,
     fmt,
@@ -130,7 +126,6 @@ use std::{
     task::{Context, Poll},
 };
 
-#[allow(unused_macros)]
 macro_rules! with_and_without_json {
     (
         $(#[$m:meta])*
@@ -174,7 +169,6 @@ with_and_without_json! {
     }
 }
 
-#[async_trait]
 impl<S, R, C, B> FromRequestParts<B> for WebSocketUpgrade<S, R, C>
 where
     B: Send + Sync,
@@ -182,7 +176,7 @@ where
     type Rejection = <ws::WebSocketUpgrade as FromRequestParts<B>>::Rejection;
 
     async fn from_request_parts(parts: &mut Parts, state: &B) -> Result<Self, Self::Rejection> {
-        let upgrade = FromRequestParts::from_request_parts(parts, state).await?;
+        let upgrade = ws::WebSocketUpgrade::from_request_parts(parts, state).await?;
         Ok(Self {
             upgrade,
             _marker: PhantomData,
@@ -277,7 +271,7 @@ impl<S, R, C> WebSocket<S, R, C> {
     /// Gracefully close this WebSocket.
     ///
     /// This is analagous to [`axum::extract::ws::WebSocket::close`].
-    pub async fn close(self) -> Result<(), Error<()>>
+    pub async fn close(mut self) -> Result<(), Error<()>>
     where
         C: Codec,
     {
@@ -306,9 +300,11 @@ where
     type Item = Result<Message<R>, Error<C::DecodeError>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let msg = futures_util::ready!(Pin::new(&mut self.socket)
-            .poll_next(cx)
-            .map_err(Error::Ws)?);
+        let msg = futures_util::ready!(
+            Pin::new(&mut self.socket)
+                .poll_next(cx)
+                .map_err(Error::Ws)?
+        );
 
         if let Some(msg) = msg {
             let msg = match msg {
@@ -367,12 +363,12 @@ where
 }
 
 /// Specifies if the message should be encoded/decoded as text or binary for transmission over the wire
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TextOrBinary {
     /// Message should be transmitted as text
-    Text(String),
+    Text(ws::Utf8Bytes),
     /// Message should be transmitted as Binary
-    Binary(Vec<u8>),
+    Binary(Bytes),
 }
 
 impl From<TextOrBinary> for ws::Message {
@@ -423,7 +419,7 @@ impl Codec for TextJsonCodec {
     where
         S: Serialize,
     {
-        serde_json::to_string(&msg).map(TextOrBinary::Text)
+        serde_json::to_string(&msg).map(|txt| TextOrBinary::Text(txt.into()))
     }
 
     fn decode<R>(msg: TextOrBinary) -> Result<R, Self::DecodeError>
@@ -455,7 +451,7 @@ impl Codec for BinaryJsonCodec {
     where
         S: Serialize,
     {
-        serde_json::to_vec(&msg).map(TextOrBinary::Binary)
+        serde_json::to_vec(&msg).map(|bin| TextOrBinary::Binary(bin.into()))
     }
 
     fn decode<R>(msg: TextOrBinary) -> Result<R, Self::DecodeError>
@@ -486,7 +482,7 @@ impl Codec for MsgPackCodec {
     where
         S: Serialize,
     {
-        rmp_serde::encode::to_vec(&msg).map(TextOrBinary::Binary)
+        rmp_serde::encode::to_vec(&msg).map(|bin| TextOrBinary::Binary(bin.into()))
     }
 
     fn decode<R>(msg: TextOrBinary) -> Result<R, Self::DecodeError>
@@ -540,12 +536,12 @@ pub enum Message<T> {
     Item(T),
     /// A ping message with the specified payload
     ///
-    /// The payload here must have a length less than 125 bytes
-    Ping(Vec<u8>),
+    /// The payload here must be at most 125 bytes long
+    Ping(Bytes),
     /// A pong message with the specified payload
     ///
-    /// The payload here must have a length less than 125 bytes
-    Pong(Vec<u8>),
+    /// The payload here must be at most 125 bytes long
+    Pong(Bytes),
     /// A close message with the optional close frame.
-    Close(Option<ws::CloseFrame<'static>>),
+    Close(Option<ws::CloseFrame>),
 }
