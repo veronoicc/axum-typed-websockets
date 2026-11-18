@@ -185,14 +185,27 @@ where
 
 #[cfg(feature = "msgpack")]
 #[tokio::test]
-async fn msgpack_codec_roundtrips_binary() {
+async fn message_pack_codec_encodes_structs_as_arrays() {
     let ping = rmp_serde::to_vec(&Ping { n: 7 }).unwrap();
-    match codec_roundtrip::<axum_typed_websockets::MsgPackCodec>(TMessage::binary(ping)).await {
-        TMessage::Binary(bin) => {
-            assert_eq!(rmp_serde::from_slice::<Pong>(&bin).unwrap(), Pong { n: 8 });
-        }
-        other => panic!("expected binary frame, got {other:?}"),
-    }
+    let reply =
+        codec_roundtrip::<axum_typed_websockets::MessagePackCodec>(TMessage::binary(ping)).await;
+    assert_eq!(
+        reply,
+        TMessage::binary(rmp_serde::to_vec(&Pong { n: 8 }).unwrap())
+    );
+}
+
+#[cfg(feature = "msgpack")]
+#[tokio::test]
+async fn message_pack_named_codec_encodes_structs_as_maps() {
+    let ping = rmp_serde::to_vec_named(&Ping { n: 7 }).unwrap();
+    let reply =
+        codec_roundtrip::<axum_typed_websockets::MessagePackNamedCodec>(TMessage::binary(ping))
+            .await;
+    assert_eq!(
+        reply,
+        TMessage::binary(rmp_serde::to_vec_named(&Pong { n: 8 }).unwrap())
+    );
 }
 
 #[cfg(feature = "bitcode")]

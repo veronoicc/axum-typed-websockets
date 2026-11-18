@@ -70,8 +70,8 @@
 //!
 //! - `json`: Enables [`TextJsonCodec`] and [`BinaryJsonCodec`] which encodes message as JSON using
 //!   `serde_json`. Enabled by default.
-//! - `msgpack`: Enables [`MsgPackCodec`] which encodes message as MessagePack using
-//!   `rmp-serde`.
+//! - `msgpack`: Enables [`MessagePackCodec`] (compact, structs as arrays) and
+//!   [`MessagePackNamedCodec`] (structs as maps with field names) using `rmp-serde`.
 //! - `bitcode`: Enables [`BitcodeCodec`] which encodes message as bitcode using `bitcode`.
 //! - `postcard`: Enables [`PostcardCodec`] which encodes message as postcard using `postcard`.
 //! - `cbor`: Enables [`CborCodec`] which encodes message as CBOR using `ciborium`.
@@ -531,9 +531,24 @@ macro_rules! binary_codec {
 }
 
 binary_codec! {
-    /// A [`Codec`] that serializes messages as MessagePack using `rmp_serde` and transmits it as binary.
-    "msgpack", MsgPackCodec,
+    /// A [`Codec`] that serializes messages as compact MessagePack using `rmp_serde` and
+    /// transmits it as binary.
+    ///
+    /// Structs are encoded as arrays (no field names). Use [`MessagePackNamedCodec`] to include
+    /// field names.
+    "msgpack", MessagePackCodec,
     encode(msg) -> rmp_serde::encode::Error { rmp_serde::encode::to_vec(&msg) },
+    decode(bytes) -> rmp_serde::decode::Error { rmp_serde::decode::from_slice(bytes) }
+}
+
+binary_codec! {
+    /// A [`Codec`] that serializes messages as MessagePack using `rmp_serde` and transmits it
+    /// as binary.
+    ///
+    /// Structs are encoded as maps keyed by field name, which is larger than
+    /// [`MessagePackCodec`] but tolerant of field reordering.
+    "msgpack", MessagePackNamedCodec,
+    encode(msg) -> rmp_serde::encode::Error { rmp_serde::encode::to_vec_named(&msg) },
     decode(bytes) -> rmp_serde::decode::Error { rmp_serde::decode::from_slice(bytes) }
 }
 

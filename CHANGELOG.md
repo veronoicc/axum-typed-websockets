@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **added:** `BitcodeCodec`, `PostcardCodec`, `CborCodec`, `FlexbuffersCodec`, `BsonCodec`,
   `RonCodec` and `XmlCodec` behind the `bitcode`, `postcard`, `cbor`, `flexbuffers`, `bson`,
   `ron` and `xml` features.
-- **added:** `TextJsonCodec`/`BinaryJsonCodec` and `MsgPackCodec` (previously unreleased).
+- **added:** `TextJsonCodec`/`BinaryJsonCodec` and `MessagePackCodec`/`MessagePackNamedCodec`
+  (previously unreleased).
 - **fixed:** docs.rs now documents all feature-gated codecs.
 
 # 0.6.0 (31. December 2023)
