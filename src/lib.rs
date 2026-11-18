@@ -72,6 +72,16 @@
 //!   `serde_json`. Enabled by default.
 //! - `msgpack`: Enables [`MsgPackCodec`] which encodes message as MessagePack using
 //!   `rmp-serde`.
+//! - `bitcode`: Enables [`BitcodeCodec`] which encodes message as bitcode using `bitcode`.
+//! - `postcard`: Enables [`PostcardCodec`] which encodes message as postcard using `postcard`.
+//! - `cbor`: Enables [`CborCodec`] which encodes message as CBOR using `ciborium`.
+//! - `flexbuffers`: Enables [`FlexbuffersCodec`] which encodes message as FlexBuffers using
+//!   `flexbuffers`.
+//! - `bson`: Enables [`BsonCodec`] which encodes message as BSON using `bson`. Messages must
+//!   serialize to a document (a struct or map).
+//! - `ron`: Enables [`RonCodec`] which encodes message as RON text using `ron`.
+//! - `xml`: Enables [`XmlCodec`] which encodes message as XML text using `quick-xml`.
+//!   Messages must serialize to an element (e.g. a struct).
 
 #![warn(
     clippy::all,
@@ -473,24 +483,121 @@ impl Codec for BinaryJsonCodec {
     }
 }
 
-/// A [`Codec`] that serializes messages as MessagePack using `rmp_serde` and transmits it as binary.
-#[cfg(feature = "msgpack")]
-#[cfg_attr(docsrs, doc(cfg(feature = "msgpack")))]
+/// Defines a [`Codec`] that transmits binary and decodes both text and binary frames as bytes.
+#[allow(
+    unused_macros,
+    reason = "unused when no binary codec feature is enabled"
+)]
+macro_rules! binary_codec {
+    (
+        $(#[$doc:meta])*
+        $feature:literal, $name:ident,
+        encode($msg:ident) -> $enc_err:ty $encode:block,
+        decode($bytes:ident) -> $dec_err:ty $decode:block
+    ) => {
+        $(#[$doc])*
+        #[cfg(feature = $feature)]
+        #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+        #[derive(Debug)]
+        #[non_exhaustive]
+        pub struct $name;
+
+        #[cfg(feature = $feature)]
+        #[cfg_attr(docsrs, doc(cfg(feature = $feature)))]
+        impl Codec for $name {
+            type EncodeError = $enc_err;
+            type DecodeError = $dec_err;
+
+            fn encode<S>($msg: S) -> Result<TextOrBinary, Self::EncodeError>
+            where
+                S: Serialize,
+            {
+                let bin: Vec<u8> = $encode?;
+                Ok(TextOrBinary::Binary(bin.into()))
+            }
+
+            fn decode<R>(msg: TextOrBinary) -> Result<R, Self::DecodeError>
+            where
+                R: DeserializeOwned,
+            {
+                let $bytes: &[u8] = match &msg {
+                    TextOrBinary::Text(txt) => txt.as_bytes(),
+                    TextOrBinary::Binary(bin) => bin,
+                };
+                $decode
+            }
+        }
+    };
+}
+
+binary_codec! {
+    /// A [`Codec`] that serializes messages as MessagePack using `rmp_serde` and transmits it as binary.
+    "msgpack", MsgPackCodec,
+    encode(msg) -> rmp_serde::encode::Error { rmp_serde::encode::to_vec(&msg) },
+    decode(bytes) -> rmp_serde::decode::Error { rmp_serde::decode::from_slice(bytes) }
+}
+
+binary_codec! {
+    /// A [`Codec`] that serializes messages with `bitcode` and transmits it as binary.
+    "bitcode", BitcodeCodec,
+    encode(msg) -> bitcode::Error { bitcode::serialize(&msg) },
+    decode(bytes) -> bitcode::Error { bitcode::deserialize(bytes) }
+}
+
+binary_codec! {
+    /// A [`Codec`] that serializes messages with `postcard` and transmits it as binary.
+    "postcard", PostcardCodec,
+    encode(msg) -> postcard::Error { postcard::to_allocvec(&msg) },
+    decode(bytes) -> postcard::Error { postcard::from_bytes(bytes) }
+}
+
+binary_codec! {
+    /// A [`Codec`] that serializes messages as CBOR using `ciborium` and transmits it as binary.
+    "cbor", CborCodec,
+    encode(msg) -> ciborium::ser::Error<std::io::Error> {
+        let mut bin = Vec::new();
+        ciborium::into_writer(&msg, &mut bin).map(|()| bin)
+    },
+    decode(bytes) -> ciborium::de::Error<std::io::Error> { ciborium::from_reader(bytes) }
+}
+
+binary_codec! {
+    /// A [`Codec`] that serializes messages as FlexBuffers using `flexbuffers` and transmits it
+    /// as binary.
+    "flexbuffers", FlexbuffersCodec,
+    encode(msg) -> flexbuffers::SerializationError { flexbuffers::to_vec(&msg) },
+    decode(bytes) -> flexbuffers::DeserializationError { flexbuffers::from_slice(bytes) }
+}
+
+binary_codec! {
+    /// A [`Codec`] that serializes messages as BSON using `bson` and transmits it as binary.
+    ///
+    /// Messages must serialize to a BSON document (a struct or map); anything else fails to
+    /// encode.
+    "bson", BsonCodec,
+    encode(msg) -> bson::error::Error { bson::serialize_to_vec(&msg) },
+    decode(bytes) -> bson::error::Error { bson::deserialize_from_slice(bytes) }
+}
+
+/// A [`Codec`] that serializes messages as RON using `ron` and transmits it as text.
+/// Note that receiving messages works as both binary or text
+#[cfg(feature = "ron")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ron")))]
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct MsgPackCodec;
+pub struct RonCodec;
 
-#[cfg(feature = "msgpack")]
-#[cfg_attr(docsrs, doc(cfg(feature = "msgpack")))]
-impl Codec for MsgPackCodec {
-    type EncodeError = rmp_serde::encode::Error;
-    type DecodeError = rmp_serde::decode::Error;
+#[cfg(feature = "ron")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ron")))]
+impl Codec for RonCodec {
+    type EncodeError = ron::Error;
+    type DecodeError = ron::error::SpannedError;
 
     fn encode<S>(msg: S) -> Result<TextOrBinary, Self::EncodeError>
     where
         S: Serialize,
     {
-        rmp_serde::encode::to_vec(&msg).map(|bin| TextOrBinary::Binary(bin.into()))
+        ron::to_string(&msg).map(|txt| TextOrBinary::Text(txt.into()))
     }
 
     fn decode<R>(msg: TextOrBinary) -> Result<R, Self::DecodeError>
@@ -498,8 +605,43 @@ impl Codec for MsgPackCodec {
         R: DeserializeOwned,
     {
         match msg {
-            TextOrBinary::Text(txt) => rmp_serde::decode::from_slice(txt.as_bytes()),
-            TextOrBinary::Binary(bin) => rmp_serde::decode::from_slice(&bin),
+            TextOrBinary::Text(txt) => ron::from_str(&txt),
+            TextOrBinary::Binary(bin) => ron::de::from_bytes(&bin),
+        }
+    }
+}
+
+/// A [`Codec`] that serializes messages as XML using `quick_xml` and transmits it as text.
+/// Note that receiving messages works as both binary or text
+///
+/// Messages must serialize to an XML element (e.g. a struct); the root element is named after
+/// the type.
+#[cfg(feature = "xml")]
+#[cfg_attr(docsrs, doc(cfg(feature = "xml")))]
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct XmlCodec;
+
+#[cfg(feature = "xml")]
+#[cfg_attr(docsrs, doc(cfg(feature = "xml")))]
+impl Codec for XmlCodec {
+    type EncodeError = quick_xml::SeError;
+    type DecodeError = quick_xml::DeError;
+
+    fn encode<S>(msg: S) -> Result<TextOrBinary, Self::EncodeError>
+    where
+        S: Serialize,
+    {
+        quick_xml::se::to_string(&msg).map(|txt| TextOrBinary::Text(txt.into()))
+    }
+
+    fn decode<R>(msg: TextOrBinary) -> Result<R, Self::DecodeError>
+    where
+        R: DeserializeOwned,
+    {
+        match msg {
+            TextOrBinary::Text(txt) => quick_xml::de::from_str(&txt),
+            TextOrBinary::Binary(bin) => quick_xml::de::from_reader(&bin[..]),
         }
     }
 }

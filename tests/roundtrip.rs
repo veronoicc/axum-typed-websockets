@@ -157,23 +157,136 @@ async fn negotiated_subprotocol_is_exposed_on_socket() {
     );
 }
 
+/// Serves `pong_loop` with codec `C`, sends `request` and returns the reply frame.
+#[cfg(any(
+    feature = "msgpack",
+    feature = "bitcode",
+    feature = "postcard",
+    feature = "cbor",
+    feature = "ron",
+    feature = "flexbuffers",
+    feature = "bson",
+    feature = "xml"
+))]
+async fn codec_roundtrip<C>(request: TMessage) -> TMessage
+where
+    C: Codec + Send + 'static,
+    C::EncodeError: Send,
+    C::DecodeError: Send,
+{
+    let app = Router::new().route(
+        "/ws",
+        get(|ws: WebSocketUpgrade<Pong, Ping, C>| async move { ws.on_upgrade(pong_loop::<C>) }),
+    );
+    let mut client = connect(serve(app).await).await;
+    client.send(request).await.unwrap();
+    client.next().await.unwrap().unwrap()
+}
+
 #[cfg(feature = "msgpack")]
 #[tokio::test]
 async fn msgpack_codec_roundtrips_binary() {
-    use axum_typed_websockets::MsgPackCodec;
-
-    async fn handler(ws: WebSocketUpgrade<Pong, Ping, MsgPackCodec>) -> impl IntoResponse {
-        ws.on_upgrade(pong_loop)
-    }
-    let mut client = connect(serve(Router::new().route("/ws", get(handler))).await).await;
-
     let ping = rmp_serde::to_vec(&Ping { n: 7 }).unwrap();
-    client.send(TMessage::binary(ping)).await.unwrap();
-
-    match client.next().await.unwrap().unwrap() {
+    match codec_roundtrip::<axum_typed_websockets::MsgPackCodec>(TMessage::binary(ping)).await {
         TMessage::Binary(bin) => {
             assert_eq!(rmp_serde::from_slice::<Pong>(&bin).unwrap(), Pong { n: 8 });
         }
         other => panic!("expected binary frame, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "bitcode")]
+#[tokio::test]
+async fn bitcode_codec_roundtrips_binary() {
+    let ping = bitcode::serialize(&Ping { n: 7 }).unwrap();
+    match codec_roundtrip::<axum_typed_websockets::BitcodeCodec>(TMessage::binary(ping)).await {
+        TMessage::Binary(bin) => {
+            assert_eq!(bitcode::deserialize::<Pong>(&bin).unwrap(), Pong { n: 8 });
+        }
+        other => panic!("expected binary frame, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "postcard")]
+#[tokio::test]
+async fn postcard_codec_roundtrips_binary() {
+    let ping = postcard::to_allocvec(&Ping { n: 7 }).unwrap();
+    match codec_roundtrip::<axum_typed_websockets::PostcardCodec>(TMessage::binary(ping)).await {
+        TMessage::Binary(bin) => {
+            assert_eq!(postcard::from_bytes::<Pong>(&bin).unwrap(), Pong { n: 8 });
+        }
+        other => panic!("expected binary frame, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "cbor")]
+#[tokio::test]
+async fn cbor_codec_roundtrips_binary() {
+    let mut ping = Vec::new();
+    ciborium::into_writer(&Ping { n: 7 }, &mut ping).unwrap();
+    match codec_roundtrip::<axum_typed_websockets::CborCodec>(TMessage::binary(ping)).await {
+        TMessage::Binary(bin) => {
+            assert_eq!(
+                ciborium::from_reader::<Pong, _>(&bin[..]).unwrap(),
+                Pong { n: 8 }
+            );
+        }
+        other => panic!("expected binary frame, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "ron")]
+#[tokio::test]
+async fn ron_codec_roundtrips_text() {
+    match codec_roundtrip::<axum_typed_websockets::RonCodec>(TMessage::text("(n: 7)")).await {
+        TMessage::Text(txt) => {
+            assert_eq!(ron::from_str::<Pong>(&txt).unwrap(), Pong { n: 8 });
+        }
+        other => panic!("expected text frame, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "flexbuffers")]
+#[tokio::test]
+async fn flexbuffers_codec_roundtrips_binary() {
+    let ping = flexbuffers::to_vec(Ping { n: 7 }).unwrap();
+    match codec_roundtrip::<axum_typed_websockets::FlexbuffersCodec>(TMessage::binary(ping)).await {
+        TMessage::Binary(bin) => {
+            assert_eq!(
+                flexbuffers::from_slice::<Pong>(&bin).unwrap(),
+                Pong { n: 8 }
+            );
+        }
+        other => panic!("expected binary frame, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "bson")]
+#[tokio::test]
+async fn bson_codec_roundtrips_binary() {
+    let ping = bson::serialize_to_vec(&Ping { n: 7 }).unwrap();
+    match codec_roundtrip::<axum_typed_websockets::BsonCodec>(TMessage::binary(ping)).await {
+        TMessage::Binary(bin) => {
+            assert_eq!(
+                bson::deserialize_from_slice::<Pong>(&bin).unwrap(),
+                Pong { n: 8 }
+            );
+        }
+        other => panic!("expected binary frame, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "xml")]
+#[tokio::test]
+async fn xml_codec_roundtrips_text() {
+    let ping = quick_xml::se::to_string(&Ping { n: 7 }).unwrap();
+    match codec_roundtrip::<axum_typed_websockets::XmlCodec>(TMessage::text(ping)).await {
+        TMessage::Text(txt) => {
+            assert_eq!(
+                quick_xml::de::from_str::<Pong>(&txt).unwrap(),
+                Pong { n: 8 }
+            );
+        }
+        other => panic!("expected text frame, got {other:?}"),
     }
 }
