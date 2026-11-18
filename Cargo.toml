@@ -44,5 +44,5 @@ quick-xml = { version = "0.42", optional = true, features = ["serialize"] }
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.54", features = ["macros", "net", "rt-multi-thread"] }
-tokio-tungstenite = "0.29"
+tokio-tungstenite = "0.30"
 axum = { version = "0.8", features = ["ws"] }
