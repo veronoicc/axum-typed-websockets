@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # Unreleased
 
+- None.
+
+# 0.7.0 (18. November 2026)
+
 - **breaking:** Update to axum 0.8.
 - **breaking:** `JsonCodec` is replaced by `TextJsonCodec` (the default, sends **Text** frames)
   and `BinaryJsonCodec` (sends Binary frames like 0.6's `JsonCodec`). Clients that expect
