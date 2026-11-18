@@ -11,6 +11,10 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/davidpdrsn/axum-typed-websockets"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [features]
 default = ["json"]
 json = ["serde_json"]

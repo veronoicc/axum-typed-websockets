@@ -162,7 +162,7 @@ with_and_without_json! {
     /// - `S` - The message sent from the server to the client.
     /// - `R` - The message sent from the client to the server.
     /// - `C` - The [`Codec`] used to encode and decode messages. Defaults to
-    /// [`JsonCodec`] which serializes messages with `serde_json`.
+    /// [`TextJsonCodec`] which serializes messages with `serde_json`.
     pub struct WebSocketUpgrade<S, R, C = TextJsonCodec> {
         upgrade: ws::WebSocketUpgrade,
         _marker: PhantomData<fn() -> (S, R, C)>,
@@ -188,7 +188,7 @@ impl<S, R, C> WebSocketUpgrade<S, R, C> {
     /// Finalize upgrading the connection and call the provided callback with
     /// the stream.
     ///
-    /// This is analagous to [`axum::extract::ws::WebSocketUpgrade::on_upgrade`].
+    /// This is analogous to [`axum::extract::ws::WebSocketUpgrade::on_upgrade`].
     pub fn on_upgrade<F, Fut>(self, callback: F) -> impl IntoResponse
     where
         F: FnOnce(WebSocket<S, R, C>) -> Fut + Send + 'static,
@@ -244,9 +244,9 @@ with_and_without_json! {
 impl<S, R, C> WebSocket<S, R, C> {
     /// Receive another message.
     ///
-    /// Returns `None` if the stream stream has closed.
+    /// Returns `None` if the stream has closed.
     ///
-    /// This is analagous to [`axum::extract::ws::WebSocket::recv`] but with a
+    /// This is analogous to [`axum::extract::ws::WebSocket::recv`] but with a
     /// statically typed message.
     pub async fn recv(&mut self) -> Option<Result<Message<R>, Error<C::DecodeError>>>
     where
@@ -258,7 +258,7 @@ impl<S, R, C> WebSocket<S, R, C> {
 
     /// Send a message.
     ///
-    /// This is analagous to [`axum::extract::ws::WebSocket::send`] but with a
+    /// This is analogous to [`axum::extract::ws::WebSocket::send`] but with a
     /// statically typed message.
     pub async fn send(&mut self, msg: Message<S>) -> Result<(), Error<C::EncodeError>>
     where
@@ -270,7 +270,8 @@ impl<S, R, C> WebSocket<S, R, C> {
 
     /// Gracefully close this WebSocket.
     ///
-    /// This is analagous to [`axum::extract::ws::WebSocket::close`].
+    /// This is analogous to calling [`SinkExt::close`] on the inner
+    /// [`axum::extract::ws::WebSocket`].
     pub async fn close(mut self) -> Result<(), Error<()>>
     where
         C: Codec,
@@ -536,7 +537,7 @@ where
     }
 }
 
-/// A WebSocket message contain a value of a known type.
+/// A WebSocket message containing a value of a known type.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Message<T> {
     /// An item of type `T`.
