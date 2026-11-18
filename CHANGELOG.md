@@ -8,18 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 # Unreleased
 
 - **breaking:** Update to axum 0.8.
-- **breaking:** `TextOrBinary` now carries `axum::extract::ws::Utf8Bytes` / `Bytes` instead of
-  `String` / `Vec<u8>` and no longer implements `Serialize`/`Deserialize`. Custom `Codec`
-  implementations need updating.
+- **breaking:** `JsonCodec` is replaced by `TextJsonCodec` (the default, sends **Text** frames)
+  and `BinaryJsonCodec` (sends Binary frames like 0.6's `JsonCodec`). Clients that expect
+  binary frames from the default codec should switch to `BinaryJsonCodec`.
+- **breaking:** The `Codec` trait now has separate `EncodeError`/`DecodeError` types and
+  encodes to / decodes from `TextOrBinary` (`Utf8Bytes` or `Bytes`) instead of `Vec<u8>`.
 - **breaking:** `Message::Ping`/`Message::Pong` carry `Bytes`, `Message::Close` carries
   `Option<CloseFrame>` (no lifetime).
 - **breaking:** Minimum supported Rust version is now 1.88 (edition 2024).
 - **added:** `WebSocket::protocol` returning the negotiated subprotocol.
-- **added:** `BitcodeCodec`, `PostcardCodec`, `CborCodec`, `FlexbuffersCodec`, `BsonCodec`,
-  `RonCodec` and `XmlCodec` behind the `bitcode`, `postcard`, `cbor`, `flexbuffers`, `bson`,
-  `ron` and `xml` features.
-- **added:** `TextJsonCodec`/`BinaryJsonCodec` and `MessagePackCodec`/`MessagePackNamedCodec`
-  (previously unreleased).
+- **added:** `MessagePackCodec`/`MessagePackNamedCodec` (`msgpack` feature), `BitcodeCodec`,
+  `PostcardCodec`, `CborCodec`, `FlexbuffersCodec`, `BsonCodec`, `RonCodec` and `XmlCodec`
+  behind the `bitcode`, `postcard`, `cbor`, `flexbuffers`, `bson`, `ron` and `xml` features.
 - **fixed:** docs.rs now documents all feature-gated codecs.
 
 # 0.6.0 (31. December 2023)
