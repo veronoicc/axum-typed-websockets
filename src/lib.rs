@@ -282,7 +282,7 @@ impl<S, R, C> WebSocket<S, R, C> {
     ///
     /// This is analogous to calling [`SinkExt::close`] on the inner
     /// [`axum::extract::ws::WebSocket`].
-    pub async fn close(mut self) -> Result<(), Error<()>>
+    pub async fn close(mut self) -> Result<(), Error<std::convert::Infallible>>
     where
         C: Codec,
     {

@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   encodes to / decodes from `TextOrBinary` (`Utf8Bytes` or `Bytes`) instead of `Vec<u8>`.
 - **breaking:** `Message::Ping`/`Message::Pong` carry `Bytes`, `Message::Close` carries
   `Option<CloseFrame>` (no lifetime).
+- **breaking:** `WebSocket::close` returns `Error<Infallible>` (closing cannot produce a codec
+  error), so close failures implement `Display`/`std::error::Error` and work with `?`.
 - **breaking:** Minimum supported Rust version is now 1.88 (edition 2024).
 - **added:** `WebSocket::protocol` returning the negotiated subprotocol.
 - **added:** `MessagePackCodec`/`MessagePackNamedCodec` (`msgpack` feature), `BitcodeCodec`,

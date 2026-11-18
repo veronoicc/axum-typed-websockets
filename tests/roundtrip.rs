@@ -129,6 +129,26 @@ async fn ping_payload_is_forwarded_untouched() {
 }
 
 #[tokio::test]
+async fn close_sends_close_frame_and_error_propagates_as_std_error() {
+    async fn close_boxed(socket: WebSocket<Pong, Ping>) -> Result<(), Box<dyn std::error::Error>> {
+        socket.close().await?;
+        Ok(())
+    }
+
+    async fn handler(ws: WebSocketUpgrade<Pong, Ping>) -> impl IntoResponse {
+        ws.on_upgrade(|socket: WebSocket<Pong, Ping>| async move {
+            let _ = close_boxed(socket).await.map_err(|err| err.to_string());
+        })
+    }
+    let mut client = connect(serve(Router::new().route("/ws", get(handler))).await).await;
+
+    match client.next().await.unwrap().unwrap() {
+        TMessage::Close(_) => {}
+        other => panic!("expected close frame, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn negotiated_subprotocol_is_exposed_on_socket() {
     use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
